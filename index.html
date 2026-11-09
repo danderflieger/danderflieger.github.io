@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -146,42 +145,12 @@
       return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
-    // Robust CSV parser that handles quoted strings and internal line breaks correctly
     function parseCSV(text) {
-      const rows = [];
-      let row = [];
-      let inQuote = false;
-      let field = '';
-      
-      for (let i = 0; i < text.length; i++) {
-        let c = text[i];
-        let next = text[i+1];
-
-        if (c === '"') {
-          if (inQuote && next === '"') {
-            field += '"';
-            i++; // skip escaped quote
-          } else {
-            inQuote = !inQuote;
-          }
-        } else if (c === ',' && !inQuote) {
-          row.push(field.trim());
-          field = '';
-        } else if ((c === '\r' || c === '\n') && !inQuote) {
-          if (c === '\r' && next === '\n') { i++; }
-          row.push(field.trim());
-          rows.push(row);
-          row = [];
-          field = '';
-        } else {
-          field += c;
-        }
-      }
-      if (field || row.length > 0) {
-        row.push(field.trim());
-        rows.push(row);
-      }
-      return rows;
+      const lines = text.split('\n');
+      return lines.map(line => {
+        const matches = line.match(/(?:^|,)("(?:[^"]|"")*"|[^,]*)/g);
+        return matches ? matches.map(m => m.replace(/^,/, '').replace(/^"|"$/g, '').replace(/""/g, '"').trim()) : [];
+      });
     }
 
     async function loadTotals() {
@@ -247,7 +216,7 @@
         let sessionCount = 0;
 
         let activeMajor = category;
-        let activeSub = ""; // Start empty so it picks up the first valid sub-assembly
+        let activeSub = "General Build";
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -255,36 +224,27 @@
 
           let major = row[0] || '';
           let sub = row[1] || '';
-          let colC = row[2] || '';
+          let date = row[2] || '';
           let hours = row[3] || '';
           let desc = row[4] || '';
 
-          // Skip header rows
-          if (major.toLowerCase().includes('major assembly') || (colC.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
+          if (major.toLowerCase().includes('major assembly') || (date.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
             continue;
           }
 
-          // Update Major Assembly if present, otherwise inherit previous
           if (major) {
             activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
           }
-
-          // Update Sub-Assembly if present in Column B.
           if (sub) {
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
-          } else if (!sub && colC && !hours && !desc) {
-            // If Column B is empty, but Column C acts as a section header row
-            activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
-            continue;
           }
 
-          // If row represents a valid session entry (has date in colC and valid numeric hours)
-          if (colC && hours && !isNaN(parseFloat(hours))) {
+          if (date && hours && !isNaN(parseFloat(hours))) {
             const hVal = parseFloat(hours);
             sessionCount++;
 
             const finalMajor = activeMajor || category;
-            const finalSub = activeSub || "General Build"; // Falls back to General Build only if truly nothing was specified
+            const finalSub = activeSub || "General Build";
 
             if (!majorMap.has(finalMajor)) {
               majorMap.set(finalMajor, new Map());
@@ -296,7 +256,7 @@
             }
             
             const subObj = subMap.get(finalSub);
-            subObj.sessions.push({ date: colC, hours: hVal, desc });
+            subObj.sessions.push({ date, hours: hVal, desc });
             subObj.totalHours += hVal;
           }
         }
@@ -345,7 +305,7 @@
                         <i class="bi bi-clock me-1"></i>${sess.hours.toFixed(2)} hrs
                       </span>
                     </div>
-                    <p class="card-text text-secondary mb-0 small" style="white-space: pre-line;">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
+                    <p class="card-text text-secondary mb-0 small">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
                   </div>
                 `;
               });
@@ -369,7 +329,6 @@
       }
     }
 
-    // Expose filterCategory globally so inline onclick attributes can access it
     window.filterCategory = function(cat) {
       activeCategory = cat;
       loadCategorySessions(cat);
