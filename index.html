@@ -116,22 +116,11 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     const SPREADSHEET_ID = "1dNpizJIsbALPzDZjjcRvZuTCdducRJDGw3UArAGwVpU";
-
-    const SHEET_GIDS = {
-      "Totals": "0",
-      "Control Surfaces": "2040187834",
-      "Wings": "1194212933",
-      "Fuselage": "1363673335",
-      "Landing Gear": "1587824103",
-      "Engine": "872016209",
-      "Avionics": "268798991"
-    };
-
     let activeCategory = "Control Surfaces";
     const cache = {};
 
-    function getCsvUrl(gid) {
-      return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${gid}`;
+    function getCsvUrl(sheetName) {
+      return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
     function parseCSV(text) {
@@ -143,105 +132,113 @@
     }
 
     async function loadTotals() {
-      const url = getCsvUrl(SHEET_GIDS["Totals"]);
-      const res = await fetch(url);
-      const text = await res.text();
-      const rows = parseCSV(text);
+      try {
+        const url = getCsvUrl("Totals");
+        const res = await fetch(url);
+        const text = await res.text();
+        const rows = parseCSV(text);
 
-      let totalsHtml = '';
-      let grandTotal = '0.00';
+        let totalsHtml = '';
+        let grandTotal = '0.00';
 
-      rows.forEach(r => {
-        if (r[0] === 'Grand Total') {
-          grandTotal = r[1] || '0.00';
-        }
-      });
-
-      totalsHtml += `
-        <div class="col-md-3">
-          <div class="card stat-card bg-primary text-white p-3 text-center">
-            <h6 class="text-uppercase tracking-wider opacity-75 fs-7 mb-1">Total Build Time</h6>
-            <h2 class="fw-bold mb-0">${grandTotal} hrs</h2>
-          </div>
-        </div>
-      `;
-
-      const categories = ["Control Surfaces", "Wings", "Fuselage", "Landing Gear", "Engine", "Avionics"];
-      categories.forEach(cat => {
-        let hrs = "0.00";
-        const found = rows.find(r => r[0] && r[0].trim().toLowerCase() === cat.toLowerCase());
-        if (found && found[1]) hrs = found[1];
+        rows.forEach(r => {
+          if (r[0] && r[0].toLowerCase().includes('grand total')) {
+            grandTotal = r[1] || '0.00';
+          }
+        });
 
         totalsHtml += `
-          <div class="col-md-3 col-6">
-            <div class="card stat-card p-3 bg-white">
-              <span class="text-muted small fw-medium">${cat}</span>
-              <h4 class="fw-bold mb-0 text-dark">${hrs} <span class="fs-6 text-muted font-normal">hrs</span></h4>
+          <div class="col-md-3">
+            <div class="card stat-card bg-primary text-white p-3 text-center">
+              <h6 class="text-uppercase tracking-wider opacity-75 fs-7 mb-1">Total Build Time</h6>
+              <h2 class="fw-bold mb-0">${grandTotal} hrs</h2>
             </div>
           </div>
         `;
-      });
 
-      document.getElementById('totalsDashboard').innerHTML = totalsHtml;
+        const categories = ["Control Surfaces", "Wings", "Fuselage", "Landing Gear", "Engine", "Avionics"];
+        categories.forEach(cat => {
+          let hrs = "0.00";
+          const found = rows.find(r => r[0] && r[0].trim().toLowerCase() === cat.toLowerCase());
+          if (found && found[1]) hrs = found[1];
+
+          totalsHtml += `
+            <div class="col-md-3 col-6">
+              <div class="card stat-card p-3 bg-white">
+                <span class="text-muted small fw-medium">${cat}</span>
+                <h4 class="fw-bold mb-0 text-dark">${hrs} <span class="fs-6 text-muted font-normal">hrs</span></h4>
+              </div>
+            </div>
+          `;
+        });
+
+        document.getElementById('totalsDashboard').innerHTML = totalsHtml;
+      } catch (err) {
+        console.error("Error loading totals:", err);
+      }
     }
 
     async function loadCategorySessions(category) {
       const feed = document.getElementById('cardsFeed');
       feed.innerHTML = `<div class="text-center py-5"><div class="spinner-border text-primary"></div></div>`;
 
-      const gid = SHEET_GIDS[category];
-      if (!gid) return;
-
-      if (!cache[category]) {
-        const res = await fetch(getCsvUrl(gid));
-        const text = await res.text();
-        cache[category] = parseCSV(text);
-      }
-
-      const rows = cache[category];
-      let cardsHtml = '';
-      let currentSubassembly = '';
-      let count = 0;
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-
-        const date = row[0] || '';
-        const hours = row[1] || '';
-        const desc = row[2] || '';
-
-        // Section header inside component tab (e.g. "Right Elevator", "Main Spars")
-        if (date && !hours && !desc) {
-          currentSubassembly = date.replace(/^\[merged\]\s*/i, '');
-          continue;
+      try {
+        if (!cache[category]) {
+          const res = await fetch(getCsvUrl(category));
+          const text = await res.text();
+          cache[category] = parseCSV(text);
         }
 
-        // Build Session Card entry
-        if (date && hours) {
-          count++;
-          cardsHtml += `
-            <div class="card session-card p-3">
-              <div class="d-flex justify-content-between align-items-start mb-2">
-                <div>
-                  <span class="badge bg-secondary me-2">${date}</span>
-                  ${currentSubassembly ? `<span class="badge subassembly-badge">${currentSubassembly}</span>` : ''}
+        const rows = cache[category];
+        let cardsHtml = '';
+        let currentSubassembly = '';
+        let count = 0;
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+
+          const date = row[0] || '';
+          const hours = row[1] || '';
+          const desc = row[2] || '';
+
+          // Skip header row
+          if (date.toLowerCase().includes('date') && hours.toLowerCase().includes('time')) continue;
+
+          // Section header inside component tab (e.g. subassembly header where date is present, but hours and desc are empty)
+          if (date && !hours && !desc) {
+            currentSubassembly = date.replace(/^\[merged\]\s*/i, '');
+            continue;
+          }
+
+          // Build Session Card entry (must have date and valid hours)
+          if (date && hours && !isNaN(parseFloat(hours))) {
+            count++;
+            cardsHtml += `
+              <div class="card session-card p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <div>
+                    <span class="badge bg-secondary me-2">${date}</span>
+                    ${currentSubassembly ? `<span class="badge subassembly-badge">${currentSubassembly}</span>` : ''}
+                  </div>
+                  <span class="badge bg-primary-subtle text-primary fw-bold fs-6">
+                    <i class="bi bi-clock me-1"></i>${hours} hrs
+                  </span>
                 </div>
-                <span class="badge bg-primary-subtle text-primary fw-bold fs-6">
-                  <i class="bi bi-clock me-1"></i>${hours} hrs
-                </span>
+                <p class="card-text text-secondary mb-0">${desc || '<em>No detailed notes recorded for this session.</em>'}</p>
               </div>
-              <p class="card-text text-secondary mb-0">${desc || '<em>No detailed notes recorded for this session.</em>'}</p>
-            </div>
-          `;
+            `;
+          }
         }
-      }
 
-      if (count === 0) {
-        cardsHtml = `<div class="alert alert-info text-center py-4"><i class="bi bi-info-circle me-2"></i>No build log entries recorded in ${category} yet.</div>`;
-      }
+        if (count === 0) {
+          cardsHtml = `<div class="alert alert-info text-center py-4"><i class="bi bi-info-circle me-2"></i>No build log entries recorded in ${category} yet.</div>`;
+        }
 
-      feed.innerHTML = cardsHtml;
+        feed.innerHTML = cardsHtml;
+      } catch (err) {
+        feed.innerHTML = `<div class="alert alert-danger text-center py-4">Error loading data for ${category}. Please check sheet sharing permissions.</div>`;
+      }
     }
 
     function filterCategory(cat) {
