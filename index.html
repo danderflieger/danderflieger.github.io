@@ -278,6 +278,7 @@
 
         let activeMajor = category;
         let activeSub = ""; 
+        let tempSubVideos = {};
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -302,7 +303,14 @@
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
           } else if (!sub && colC && !hours && !desc) {
             activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
+            if (ytLink) {
+              tempSubVideos[activeSub] = ytLink.trim();
+            }
             continue;
+          }
+
+          if (ytLink && activeSub) {
+            tempSubVideos[activeSub] = ytLink.trim();
           }
 
           if (colC && hours && !isNaN(parseFloat(hours))) {
@@ -311,7 +319,6 @@
 
             const finalMajor = activeMajor || category;
             const finalSub = activeSub || "General Build";
-            const finalVideo = ytLink ? ytLink.trim() : ""; // Only grab the video link if present on this exact row
 
             if (!majorMap.has(finalMajor)) {
               majorMap.set(finalMajor, new Map());
@@ -319,9 +326,8 @@
             const subMap = majorMap.get(finalMajor);
 
             if (!subMap.has(finalSub)) {
-              subMap.set(finalSub, { sessions: [], totalHours: 0, youtubeUrl: finalVideo });
-            } else if (finalVideo && !subMap.get(finalSub).youtubeUrl) {
-              subMap.get(finalSub).youtubeUrl = finalVideo;
+              const savedVideo = tempSubVideos[finalSub] || "";
+              subMap.set(finalSub, { sessions: [], totalHours: 0, youtubeUrl: savedVideo });
             }
             
             const subObj = subMap.get(finalSub);
