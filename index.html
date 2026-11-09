@@ -67,16 +67,17 @@
       background: #fafafa;
       border-radius: 4px;
       margin-bottom: 0.50rem;
+      padding: 0.75rem;
     }
     .video-container {
       position: relative;
       width: 100%;
       padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
       height: 0;
-      margin-top: 0.75rem;
       border-radius: 6px;
       overflow: hidden;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: #000;
     }
     .video-container iframe {
       position: absolute;
@@ -85,6 +86,25 @@
       width: 100%;
       height: 100%;
       border: 0;
+    }
+    /* Responsive layout: side-by-side on wide screens, stacked on mobile */
+    .media-layout {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    @media (min-width: 992px) {
+      .media-layout {
+        flex-direction: row-reverse;
+        align-items: flex-start;
+      }
+      .media-layout .content-side {
+        flex: 1;
+      }
+      .media-layout .video-side {
+        flex: 0 0 45%;
+        max-width: 45%;
+      }
     }
     .nav-pills .nav-link.active {
       background-color: var(--accent-blue);
@@ -276,9 +296,10 @@
         const majorMap = new Map(); 
         let sessionCount = 0;
 
-        let activeMajor = category;
-        let activeSub = ""; 
-        let tempSubVideos = {};
+        let activeMajor = "";
+        let activeSub = "";
+        let majorVideos = {};
+        let subVideos = {};
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -297,20 +318,21 @@
 
           if (major) {
             activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
+            if (ytLink) majorVideos[activeMajor] = ytLink.trim();
+            activeSub = "";
           }
 
           if (sub) {
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
+            if (ytLink) subVideos[activeSub] = ytLink.trim();
           } else if (!sub && colC && !hours && !desc) {
             activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) {
-              tempSubVideos[activeSub] = ytLink.trim();
-            }
+            if (ytLink) subVideos[activeSub] = ytLink.trim();
             continue;
           }
 
           if (ytLink && activeSub) {
-            tempSubVideos[activeSub] = ytLink.trim();
+            subVideos[activeSub] = ytLink.trim();
           }
 
           if (colC && hours && !isNaN(parseFloat(hours))) {
@@ -319,19 +341,30 @@
 
             const finalMajor = activeMajor || category;
             const finalSub = activeSub || "General Build";
+            const sessionVideo = ytLink ? ytLink.trim() : "";
 
             if (!majorMap.has(finalMajor)) {
-              majorMap.set(finalMajor, new Map());
+              const majVid = majorVideos[finalMajor] || "";
+              majorMap.set(finalMajor, { youtubeUrl: majVid, subMap: new Map() });
             }
-            const subMap = majorMap.get(finalMajor);
+            
+            const majorObj = majorMap.get(finalMajor);
+            if (!majorObj.youtubeUrl && majorVideos[finalMajor]) {
+              majorObj.youtubeUrl = majorVideos[finalMajor];
+            }
 
+            const subMap = majorObj.subMap;
             if (!subMap.has(finalSub)) {
-              const savedVideo = tempSubVideos[finalSub] || "";
-              subMap.set(finalSub, { sessions: [], totalHours: 0, youtubeUrl: savedVideo });
+              const subVid = subVideos[finalSub] || "";
+              subMap.set(finalSub, { sessions: [], totalHours: 0, youtubeUrl: subVid });
             }
             
             const subObj = subMap.get(finalSub);
-            subObj.sessions.push({ date: colC, hours: hVal, desc });
+            if (!subObj.youtubeUrl && subVideos[finalSub]) {
+              subObj.youtubeUrl = subVideos[finalSub];
+            }
+
+            subObj.sessions.push({ date: colC, hours: hVal, desc, youtubeUrl: sessionVideo });
             subObj.totalHours += hVal;
           }
         }
@@ -340,9 +373,11 @@
         if (sessionCount === 0 && majorMap.size === 0) {
           html = `<div class="alert alert-info text-center py-4"><i class="bi bi-info-circle me-2"></i>No build log entries recorded in ${category} yet.</div>`;
         } else {
-          majorMap.forEach((subMap, majorName) => {
+          majorMap.forEach((majorObj, majorName) => {
             let majorTotalHours = 0;
-            subMap.forEach(subObj => { majorTotalHours += subObj.totalHours; });
+            majorObj.subMap.forEach(subObj => { majorTotalHours += subObj.totalHours; });
+
+            const majorEmbed = getYouTubeEmbedUrl(majorObj.youtubeUrl);
 
             html += `
               <div class="card major-card mb-4">
@@ -357,8 +392,23 @@
                 <div class="card-body p-3">
             `;
 
-            subMap.forEach((subObj, subName) => {
-              const embedUrl = getYouTubeEmbedUrl(subObj.youtubeUrl);
+            if (majorEmbed) {
+              html += `
+                <div class="mb-4">
+                  <div class="media-layout">
+                    <div class="content-side"></div>
+                    <div class="video-side">
+                      <div class="video-container">
+                        <iframe src="${majorEmbed}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+
+            majorObj.subMap.forEach((subObj, subName) => {
+              const subEmbed = getYouTubeEmbedUrl(subObj.youtubeUrl);
 
               html += `
                 <div class="card subassembly-card mb-3">
@@ -373,17 +423,47 @@
                   <div class="card-body p-3">
               `;
 
-              if (embedUrl) {
+              if (subEmbed) {
                 html += `
-                  <div class="video-container mb-3">
-                    <iframe src="${embedUrl}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                  <div class="media-layout mb-3">
+                    <div class="content-side"></div>
+                    <div class="video-side">
+                      <div class="video-container">
+                        <iframe src="${subEmbed}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                      </div>
+                    </div>
                   </div>
                 `;
               }
 
               subObj.sessions.forEach(sess => {
+                const sessEmbed = getYouTubeEmbedUrl(sess.youtubeUrl);
+
                 html += `
-                  <div class="session-item p-2 mb-2">
+                  <div class="session-item mb-2">
+                `;
+
+                if (sessEmbed) {
+                  html += `
+                    <div class="media-layout">
+                      <div class="content-side">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                          <span class="badge bg-dark">${sess.date}</span>
+                          <span class="badge bg-light text-primary border fw-bold">
+                            <i class="bi bi-clock me-1"></i>${sess.hours.toFixed(2)} hrs
+                          </span>
+                        </div>
+                        <p class="card-text text-secondary mb-0 small" style="white-space: pre-line;">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
+                      </div>
+                      <div class="video-side">
+                        <div class="video-container mt-2 mt-lg-0">
+                          <iframe src="${sessEmbed}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                } else {
+                  html += `
                     <div class="d-flex justify-content-between align-items-start mb-1">
                       <span class="badge bg-dark">${sess.date}</span>
                       <span class="badge bg-light text-primary border fw-bold">
@@ -391,6 +471,10 @@
                       </span>
                     </div>
                     <p class="card-text text-secondary mb-0 small" style="white-space: pre-line;">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
+                  `;
+                }
+
+                html += `
                   </div>
                 `;
               });
