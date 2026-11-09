@@ -278,7 +278,6 @@
 
         let activeMajor = category;
         let activeSub = ""; 
-        let activeVideoUrl = "";
 
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
@@ -301,15 +300,9 @@
 
           if (sub) {
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) activeVideoUrl = ytLink.trim();
           } else if (!sub && colC && !hours && !desc) {
             activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) activeVideoUrl = ytLink.trim();
             continue;
-          }
-
-          if (ytLink) {
-            activeVideoUrl = ytLink.trim();
           }
 
           if (colC && hours && !isNaN(parseFloat(hours))) {
@@ -318,7 +311,7 @@
 
             const finalMajor = activeMajor || category;
             const finalSub = activeSub || "General Build";
-            const finalVideo = activeVideoUrl || "";
+            const finalVideo = ytLink ? ytLink.trim() : ""; // Only grab the video link if present on this exact row
 
             if (!majorMap.has(finalMajor)) {
               majorMap.set(finalMajor, new Map());
