@@ -87,7 +87,6 @@
       height: 100%;
       border: 0;
     }
-    /* Responsive layout: side-by-side on wide screens, stacked on mobile */
     .media-layout {
       display: flex;
       flex-direction: column;
@@ -296,75 +295,42 @@
         const majorMap = new Map(); 
         let sessionCount = 0;
 
-        let activeMajor = "";
-        let activeSub = "";
-        let majorVideos = {};
-        let subVideos = {};
-
         for (let i = 0; i < rows.length; i++) {
           const row = rows[i];
           if (!row || row.length === 0) continue;
 
           let major = row[0] || '';
           let sub = row[1] || '';
-          let colC = row[2] || '';
+          let date = row[2] || '';
           let hours = row[3] || '';
           let desc = row[4] || '';
           let ytLink = row[5] || '';
 
-          if (major.toLowerCase().includes('major assembly') || (colC.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
+          // Skip header rows
+          if (major.toLowerCase().includes('major assembly') || (date.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
             continue;
           }
 
-          if (major) {
-            activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) majorVideos[activeMajor] = ytLink.trim();
-            activeSub = "";
-          }
-
-          if (sub) {
-            activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) subVideos[activeSub] = ytLink.trim();
-          } else if (!sub && colC && !hours && !desc) {
-            activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
-            if (ytLink) subVideos[activeSub] = ytLink.trim();
-            continue;
-          }
-
-          if (ytLink && activeSub) {
-            subVideos[activeSub] = ytLink.trim();
-          }
-
-          if (colC && hours && !isNaN(parseFloat(hours))) {
+          // Process only valid session rows
+          if (date && hours && !isNaN(parseFloat(hours))) {
             const hVal = parseFloat(hours);
             sessionCount++;
 
-            const finalMajor = activeMajor || category;
-            const finalSub = activeSub || "General Build";
+            const finalMajor = major || category;
+            const finalSub = sub || "General Build";
             const sessionVideo = ytLink ? ytLink.trim() : "";
 
             if (!majorMap.has(finalMajor)) {
-              const majVid = majorVideos[finalMajor] || "";
-              majorMap.set(finalMajor, { youtubeUrl: majVid, subMap: new Map() });
+              majorMap.set(finalMajor, new Map());
             }
-            
-            const majorObj = majorMap.get(finalMajor);
-            if (!majorObj.youtubeUrl && majorVideos[finalMajor]) {
-              majorObj.youtubeUrl = majorVideos[finalMajor];
-            }
+            const subMap = majorMap.get(finalMajor);
 
-            const subMap = majorObj.subMap;
             if (!subMap.has(finalSub)) {
-              const subVid = subVideos[finalSub] || "";
-              subMap.set(finalSub, { sessions: [], totalHours: 0, youtubeUrl: subVid });
+              subMap.set(finalSub, { sessions: [], totalHours: 0 });
             }
             
             const subObj = subMap.get(finalSub);
-            if (!subObj.youtubeUrl && subVideos[finalSub]) {
-              subObj.youtubeUrl = subVideos[finalSub];
-            }
-
-            subObj.sessions.push({ date: colC, hours: hVal, desc, youtubeUrl: sessionVideo });
+            subObj.sessions.push({ date: date, hours: hVal, desc, youtubeUrl: sessionVideo });
             subObj.totalHours += hVal;
           }
         }
@@ -373,11 +339,9 @@
         if (sessionCount === 0 && majorMap.size === 0) {
           html = `<div class="alert alert-info text-center py-4"><i class="bi bi-info-circle me-2"></i>No build log entries recorded in ${category} yet.</div>`;
         } else {
-          majorMap.forEach((majorObj, majorName) => {
+          majorMap.forEach((subMap, majorName) => {
             let majorTotalHours = 0;
-            majorObj.subMap.forEach(subObj => { majorTotalHours += subObj.totalHours; });
-
-            const majorEmbed = getYouTubeEmbedUrl(majorObj.youtubeUrl);
+            subMap.forEach(subObj => { majorTotalHours += subObj.totalHours; });
 
             html += `
               <div class="card major-card mb-4">
@@ -392,24 +356,7 @@
                 <div class="card-body p-3">
             `;
 
-            if (majorEmbed) {
-              html += `
-                <div class="mb-4">
-                  <div class="media-layout">
-                    <div class="content-side"></div>
-                    <div class="video-side">
-                      <div class="video-container">
-                        <iframe src="${majorEmbed}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              `;
-            }
-
-            majorObj.subMap.forEach((subObj, subName) => {
-              const subEmbed = getYouTubeEmbedUrl(subObj.youtubeUrl);
-
+            subMap.forEach((subObj, subName) => {
               html += `
                 <div class="card subassembly-card mb-3">
                   <div class="subassembly-header d-flex justify-content-between align-items-center">
@@ -422,19 +369,6 @@
                   </div>
                   <div class="card-body p-3">
               `;
-
-              if (subEmbed) {
-                html += `
-                  <div class="media-layout mb-3">
-                    <div class="content-side"></div>
-                    <div class="video-side">
-                      <div class="video-container">
-                        <iframe src="${subEmbed}" title="YouTube video player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-                      </div>
-                    </div>
-                  </div>
-                `;
-              }
 
               subObj.sessions.forEach(sess => {
                 const sessEmbed = getYouTubeEmbedUrl(sess.youtubeUrl);
