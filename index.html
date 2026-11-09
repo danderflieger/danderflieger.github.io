@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -249,3 +250,137 @@
         let activeSub = ""; // Start empty so it picks up the first valid sub-assembly
 
         for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+
+          let major = row[0] || '';
+          let sub = row[1] || '';
+          let colC = row[2] || '';
+          let hours = row[3] || '';
+          let desc = row[4] || '';
+
+          // Skip header rows
+          if (major.toLowerCase().includes('major assembly') || (colC.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
+            continue;
+          }
+
+          // Update Major Assembly if present, otherwise inherit previous
+          if (major) {
+            activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
+          }
+
+          // Update Sub-Assembly if present in Column B.
+          if (sub) {
+            activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
+          } else if (!sub && colC && !hours && !desc) {
+            // If Column B is empty, but Column C acts as a section header row
+            activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
+            continue;
+          }
+
+          // If row represents a valid session entry (has date in colC and valid numeric hours)
+          if (colC && hours && !isNaN(parseFloat(hours))) {
+            const hVal = parseFloat(hours);
+            sessionCount++;
+
+            const finalMajor = activeMajor || category;
+            const finalSub = activeSub || "General Build"; // Falls back to General Build only if truly nothing was specified
+
+            if (!majorMap.has(finalMajor)) {
+              majorMap.set(finalMajor, new Map());
+            }
+            const subMap = majorMap.get(finalMajor);
+
+            if (!subMap.has(finalSub)) {
+              subMap.set(finalSub, { sessions: [], totalHours: 0 });
+            }
+            
+            const subObj = subMap.get(finalSub);
+            subObj.sessions.push({ date: colC, hours: hVal, desc });
+            subObj.totalHours += hVal;
+          }
+        }
+
+        let html = '';
+        if (sessionCount === 0 && majorMap.size === 0) {
+          html = `<div class="alert alert-info text-center py-4"><i class="bi bi-info-circle me-2"></i>No build log entries recorded in ${category} yet.</div>`;
+        } else {
+          majorMap.forEach((subMap, majorName) => {
+            let majorTotalHours = 0;
+            subMap.forEach(subObj => { majorTotalHours += subObj.totalHours; });
+
+            html += `
+              <div class="card major-card mb-4">
+                <div class="major-header d-flex justify-content-between align-items-center">
+                  <h4 class="fw-bold mb-0 text-dark">
+                    <i class="bi bi-gear-wide-connected text-primary me-2"></i>${majorName}
+                  </h4>
+                  <span class="badge bg-primary px-3 py-2 fs-6">
+                    <i class="bi bi-clock me-1"></i>${majorTotalHours.toFixed(2)} hrs total
+                  </span>
+                </div>
+                <div class="card-body p-3">
+            `;
+
+            subMap.forEach((subObj, subName) => {
+              html += `
+                <div class="card subassembly-card mb-3">
+                  <div class="subassembly-header d-flex justify-content-between align-items-center">
+                    <span class="fw-bold text-secondary">
+                      <i class="bi bi-tools me-1"></i>${subName}
+                    </span>
+                    <span class="badge bg-secondary px-2 py-1">
+                      ${subObj.totalHours.toFixed(2)} hrs
+                    </span>
+                  </div>
+                  <div class="card-body p-2">
+              `;
+
+              subObj.sessions.forEach(sess => {
+                html += `
+                  <div class="session-item p-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-1">
+                      <span class="badge bg-dark">${sess.date}</span>
+                      <span class="badge bg-light text-primary border fw-bold">
+                        <i class="bi bi-clock me-1"></i>${sess.hours.toFixed(2)} hrs
+                      </span>
+                    </div>
+                    <p class="card-text text-secondary mb-0 small" style="white-space: pre-line;">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
+                  </div>
+                `;
+              });
+
+              html += `
+                  </div>
+                </div>
+              `;
+            });
+
+            html += `
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        feed.innerHTML = html;
+      } catch (err) {
+        feed.innerHTML = `<div class="alert alert-danger text-center py-4">Error loading data for ${category}. Please check sheet sharing permissions.</div>`;
+      }
+    }
+
+    // Expose filterCategory globally so inline onclick attributes can access it
+    window.filterCategory = function(cat) {
+      activeCategory = cat;
+      loadCategorySessions(cat);
+    };
+
+    async function loadBuildData() {
+      await loadTotals();
+      await loadCategorySessions(activeCategory);
+    }
+
+    document.addEventListener("DOMContentLoaded", loadBuildData);
+  </script>
+</body>
+</html>
