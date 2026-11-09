@@ -212,7 +212,7 @@
         }
 
         const rows = cache[category];
-        const majorMap = new Map(); // Key: Major Assembly Name, Value: Map of Sub-Assemblies
+        const majorMap = new Map(); 
         let sessionCount = 0;
 
         let activeMajor = category;
@@ -222,28 +222,33 @@
           const row = rows[i];
           if (!row || row.length === 0) continue;
 
-          // 5-Column layout: Col 0: Major Assembly, Col 1: Sub-Assembly, Col 2: Date, Col 3: Time, Col 4: Description
           let major = row[0] || '';
           let sub = row[1] || '';
-          let date = row[2] || '';
+          let colC = row[2] || '';
           let hours = row[3] || '';
           let desc = row[4] || '';
 
-          // Skip column headers
-          if (major.toLowerCase().includes('major assembly') || (date.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
+          // Skip header rows
+          if (major.toLowerCase().includes('major assembly') || (colC.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
             continue;
           }
 
-          // Update context trackers if specified in the row
+          // Update Major Assembly if present
           if (major) {
             activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
           }
+
+          // Update Sub-Assembly from Column B if present. 
+          // (Also handle legacy case where sub-assembly might be in Col C if Col B was empty)
           if (sub) {
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
+          } else if (!sub && colC && !hours && !desc) {
+            activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
+            continue; // Skip header-only row
           }
 
-          // If row represents a session entry (has a date and valid hours)
-          if (date && hours && !isNaN(parseFloat(hours))) {
+          // If row represents a valid session entry (has date in colC and valid hours)
+          if (colC && hours && !isNaN(parseFloat(hours))) {
             const hVal = parseFloat(hours);
             sessionCount++;
 
@@ -260,7 +265,7 @@
             }
             
             const subObj = subMap.get(finalSub);
-            subObj.sessions.push({ date, hours: hVal, desc });
+            subObj.sessions.push({ date: colC, hours: hVal, desc });
             subObj.totalHours += hVal;
           }
         }
