@@ -145,12 +145,42 @@
       return `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
     }
 
+    // Robust CSV parser that handles quoted strings and internal line breaks correctly
     function parseCSV(text) {
-      const lines = text.split('\n');
-      return lines.map(line => {
-        const matches = line.match(/(?:^|,)("(?:[^"]|"")*"|[^,]*)/g);
-        return matches ? matches.map(m => m.replace(/^,/, '').replace(/^"|"$/g, '').replace(/""/g, '"').trim()) : [];
-      });
+      const rows = [];
+      let row = [];
+      let inQuote = false;
+      let field = '';
+      
+      for (let i = 0; i < text.length; i++) {
+        let c = text[i];
+        let next = text[i+1];
+
+        if (c === '"') {
+          if (inQuote && next === '"') {
+            field += '"';
+            i++; // skip escaped quote
+          } else {
+            inQuote = !inQuote;
+          }
+        } else if (c === ',' && !inQuote) {
+          row.push(field.trim());
+          field = '';
+        } else if ((c === '\r' || c === '\n') && !inQuote) {
+          if (c === '\r' && next === '\n') { i++; }
+          row.push(field.trim());
+          rows.push(row);
+          row = [];
+          field = '';
+        } else {
+          field += c;
+        }
+      }
+      if (field || row.length > 0) {
+        row.push(field.trim());
+        rows.push(row);
+      }
+      return rows;
     }
 
     async function loadTotals() {
@@ -238,22 +268,22 @@
             activeMajor = major.replace(/^\[merged\]\s*/i, '').trim();
           }
 
-          // Update Sub-Assembly from Column B if present. 
-          // (Also handle legacy case where sub-assembly might be in Col C if Col B was empty)
+          // Update Sub-Assembly if present in Column B. 
+          // If Column B is empty but Column C has text and NO hours/desc, treat Column C as the sub-assembly header row.
           if (sub) {
             activeSub = sub.replace(/^\[merged\]\s*/i, '').trim();
           } else if (!sub && colC && !hours && !desc) {
             activeSub = colC.replace(/^\[merged\]\s*/i, '').trim();
-            continue; // Skip header-only row
+            continue; 
           }
 
-          // If row represents a valid session entry (has date in colC and valid hours)
+          // If row represents a valid session entry (has date in colC and valid numeric hours)
           if (colC && hours && !isNaN(parseFloat(hours))) {
             const hVal = parseFloat(hours);
             sessionCount++;
 
             const finalMajor = activeMajor || category;
-            const finalSub = activeSub || "General Assembly";
+            const finalSub = activeSub || "General Build";
 
             if (!majorMap.has(finalMajor)) {
               majorMap.set(finalMajor, new Map());
@@ -314,7 +344,7 @@
                         <i class="bi bi-clock me-1"></i>${sess.hours.toFixed(2)} hrs
                       </span>
                     </div>
-                    <p class="card-text text-secondary mb-0 small">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
+                    <p class="card-text text-secondary mb-0 small" style="white-space: pre-line;">${sess.desc || '<em>No detailed notes recorded for this session.</em>'}</p>
                   </div>
                 `;
               });
