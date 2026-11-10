@@ -186,6 +186,9 @@
       <li class="nav-item">
         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-avionics" onclick="filterCategory('Avionics')">Avionics</button>
       </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tools" onclick="filterCategory('Tools')">Tools</button>
+      </li>
     </ul>
 
     <!-- Build Session Cards Feed -->
@@ -313,7 +316,7 @@
           </div>
         `;
 
-        const categories = ["Control Surfaces", "Wings", "Fuselage", "Landing Gear", "Engine", "Avionics"];
+        const categories = ["Control Surfaces", "Wings", "Fuselage", "Landing Gear", "Engine", "Avionics", "Tools"];
         categories.forEach(cat => {
           let hrs = "0.00";
           const found = rows.find(r => r[0] && r[0].trim().toLowerCase() === cat.toLowerCase());
