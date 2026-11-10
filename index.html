@@ -87,6 +87,7 @@
       height: 100%;
       border: 0;
     }
+    /* Media layout: text on left, video on right for wide screens */
     .media-layout {
       display: flex;
       flex-direction: column;
@@ -94,7 +95,7 @@
     }
     @media (min-width: 992px) {
       .media-layout {
-        flex-direction: row-reverse;
+        flex-direction: row;
         align-items: flex-start;
       }
       .media-layout .content-side {
