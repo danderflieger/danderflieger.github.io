@@ -206,9 +206,7 @@
         </div>
         <div class="modal-body p-0">
           <div id="buildCarousel" class="carousel slide" data-bs-ride="carousel">
-            <div class="carousel-inner" id="carouselInner">
-              <!-- Dynamically populated images -->
-            </div>
+            <div class="carousel-inner" id="carouselInner"></div>
             <button class="carousel-control-prev" type="button" data-bs-target="#buildCarousel" data-bs-slide="prev">
               <span class="carousel-control-prev-icon" aria-hidden="true"></span>
               <span class="visually-hidden">Previous</span>
@@ -284,7 +282,6 @@
       return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
     }
 
-    // Helper to format Google Photos links or direct image links for thumbnails
     function cleanImageUrl(url) {
       if (!url) return '';
       return url.trim();
@@ -362,7 +359,7 @@
           let hours = row[3] || '';
           let desc = row[4] || '';
           let ytLink = row[5] || '';
-          let imgLinksStr = row[6] || ''; // Column G: Image Link (semi-colon delimited)
+          let imgLinksStr = row[6] || '';
 
           if (major.toLowerCase().includes('major assembly') || (date.toLowerCase().includes('date') && hours.toLowerCase().includes('time'))) {
             continue;
@@ -429,13 +426,11 @@
 
               subObj.sessions.forEach((sess, sessIndex) => {
                 const sessEmbed = getYouTubeEmbedUrl(sess.youtubeUrl);
-                const uniqueId = `sess-${i}-${sessIndex}`;
 
                 html += `
                   <div class="session-item mb-2">
                 `;
 
-                // Build media layout if video is present
                 if (sessEmbed) {
                   html += `
                     <div class="media-layout">
@@ -467,11 +462,9 @@
                   `;
                 }
 
-                // Render Thumbnails if images exist for this session
                 if (sess.images && sess.images.length > 0) {
                   html += `<div class="thumbnail-grid">`;
                   sess.images.forEach((imgUrl, imgIndex) => {
-                    // Escape single quotes for safety in inline js
                     const safeImgsStr = JSON.stringify(sess.images).replace(/"/g, '&quot;');
                     html += `
                       <img src="${imgUrl}" class="build-thumbnail" alt="Build Photo" onclick='openCarousel(${safeImgsStr}, ${imgIndex})'>
@@ -504,7 +497,6 @@
       }
     }
 
-    // Function to populate and open the Bootstrap modal carousel
     window.openCarousel = function(imagesArray, startIndex) {
       const carouselInner = document.getElementById('carouselInner');
       carouselInner.innerHTML = '';
